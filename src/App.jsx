@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import LiftCard from './components/LiftCard';
 import Header from './components/Header';
@@ -12,6 +12,7 @@ import TopAlert from './components/TopAlert';
 const App = () => {
   const [selectedBuilding, setSelectedBuilding] = useState('Belly 1');
   const [liftData, setLiftData] = useState([]);
+  const previousFloorsRef = useRef({}); // Use ref instead of state
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertLift, setAlertLift] = useState(null);
   const [alertBuilding, setAlertBuilding] = useState('');
@@ -21,13 +22,50 @@ const App = () => {
   };
 
   useEffect(() => {
-    const interval = setInterval(async () => {
+    // Fetch data immediately on mount
+    const fetchData = async () => {
       const data = await fetchLiftData();
+      const previousFloors = previousFloorsRef.current;
       
-      // Flatten the data for easier processing
+      console.log('Previous floors:', previousFloors);
+      
+      // Flatten the data and calculate direction
       const flattenedData = Object.entries(data).flatMap(([building, lifts]) =>
-        lifts.map(lift => ({ ...lift, building }))
+        lifts.map(lift => {
+          const currentFloor = parseInt(lift.Fl);
+          const liftKey = `${building}-${lift.ID}`;
+          const prevFloor = previousFloors[liftKey];
+          
+          console.log(`${liftKey}: current=${currentFloor}, prev=${prevFloor}`);
+          
+          let direction = 'stationary'; // default
+          
+          if (lift.Alarm === '1') {
+            direction = 'stationary'; // alarm = in service, no movement
+            console.log(`${liftKey}: In service (Alarm), direction = stationary`);
+          } else if (lift.Door === '1') {
+            direction = 'stationary'; // door open = stationary
+            console.log(`${liftKey}: Door open, direction = stationary`);
+          } else if (prevFloor !== undefined && prevFloor !== currentFloor) {
+            direction = currentFloor > prevFloor ? 'up' : 'down';
+            console.log(`${liftKey}: Moving ${direction} (${prevFloor} -> ${currentFloor})`);
+          } else {
+            console.log(`${liftKey}: No movement or first load, direction = stationary`);
+          }
+          
+          return { ...lift, building, direction };
+        })
       );
+      
+      // Update previous floors for next comparison
+      const newPreviousFloors = {};
+      flattenedData.forEach(lift => {
+        const liftKey = `${lift.building}-${lift.ID}`;
+        newPreviousFloors[liftKey] = parseInt(lift.Fl);
+      });
+      previousFloorsRef.current = newPreviousFloors;
+      console.log('Updated previous floors:', newPreviousFloors);
+      
       setLiftData(flattenedData);
 
       const newAlerts = flattenedData
@@ -46,8 +84,13 @@ const App = () => {
         );
         return [...prevAlerts, ...uniqueNewAlerts];
       });
+    };
 
-    }, 3000);
+    // Load data immediately
+    fetchData();
+
+    // Then set up interval for periodic updates
+    const interval = setInterval(fetchData, 3000);
 
     return () => clearInterval(interval);
   }, []);
