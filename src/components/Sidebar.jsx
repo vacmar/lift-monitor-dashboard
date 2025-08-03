@@ -9,7 +9,7 @@ const Sidebar = ({ selected, onSelect }) => {
 
       <div className="building-list-container">
         <ul className="building-list">
-          {Object.keys(buildings).map((building) => (
+          {buildings.map((building) => (
             <li
               key={building}
               className={`building-item ${selected === building ? 'active' : ''}`}

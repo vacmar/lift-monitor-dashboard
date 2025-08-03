@@ -23,27 +23,26 @@ const App = () => {
   useEffect(() => {
     const interval = setInterval(async () => {
       const data = await fetchLiftData();
-      setLiftData(data);
+      
+      // Flatten the data for easier processing
+      const flattenedData = Object.entries(data).flatMap(([building, lifts]) =>
+        lifts.map(lift => ({ ...lift, building }))
+      );
+      setLiftData(flattenedData);
 
-      const newAlerts = data
+      const newAlerts = flattenedData
         .filter((lift) => lift.Alarm === "1")
-        .map((lift) => {
-          const buildingName = Object.entries(buildings).find(([, ids]) =>
-            ids.includes(lift.ID)
-          )?.[0];
-
-          return {
-            id: lift.ID,
-            floor: lift.Fl,
-            building: buildingName || 'Unknown',
-          };
-        });
+        .map((lift) => ({
+          id: lift.ID,
+          floor: lift.Fl,
+          building: lift.building,
+        }));
 
       setAlerts(prevAlerts => {
         // Avoid duplicate alerts already shown
-        const existingKeys = new Set(prevAlerts.map(a => `${a.id}-${a.floor}`));
+        const existingKeys = new Set(prevAlerts.map(a => `${a.id}-${a.floor}-${a.building}`));
         const uniqueNewAlerts = newAlerts.filter(
-          a => !existingKeys.has(`${a.id}-${a.floor}`)
+          a => !existingKeys.has(`${a.id}-${a.floor}-${a.building}`)
         );
         return [...prevAlerts, ...uniqueNewAlerts];
       });
@@ -54,7 +53,7 @@ const App = () => {
   }, []);
 
   const visibleLifts = liftData.filter((lift) =>
-    buildings[selectedBuilding]?.includes(lift.ID)
+    lift.building === selectedBuilding
   );
 
   return (
